@@ -2,6 +2,11 @@
 
 All notable changes to this repo are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- CI workflow: `actions/checkout` v4 → v7 and `actions/setup-python` v5 → v7 (`@v7`), both running on Node.js 24. GitHub has deprecated Node.js 20 on Actions runners and was forcing the old versions onto Node.js 24 with a warning. No change to what CI runs (tests on Python 3.9 and 3.12).
+
 ## [1.0.0] - 2026-10-15
 
 First "ready to use" release: on top of the one-time setup, a scheduled sync keeps the palace fed.
