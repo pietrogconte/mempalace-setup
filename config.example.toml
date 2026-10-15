@@ -1,0 +1,86 @@
+# mempalace-sync configuration.
+# Copy to ~/.config/mempalace-sync/config.toml and edit. Paths accept ~ and %VARS%/$VARS.
+# Keep personal paths in that copy only - never commit it.
+
+report_language = "en"            # "en" or "pt"
+
+[mempalace]
+# How to call MemPalace. On Windows with Smart App Control, use the tool venv's
+# python instead of the unsigned mempalace.exe launcher.
+command = ["C:/Users/<you>/AppData/Roaming/uv/tools/mempalace/Scripts/python.exe", "-m", "mempalace"]
+# palace = "~/.config/mempalace/palace"   # default: palace_path from ~/.config/mempalace/config.json
+lock_policy = "wait"              # another writer holds the palace: "wait" (then skip) or "skip" right away
+lock_wait_seconds = 600
+lock_poll_seconds = 15
+mine_timeout_seconds = 3600
+agent = "mempalace-sync"          # recorded on every drawer this tool files
+
+[paths]
+exports = "~/exports"             # defaults below are relative to this
+# inbox = "~/exports/inbox"       # drop claude.ai / ChatGPT export .zip files here
+# processed = "~/exports/inbox/processed"
+# reports = "~/exports/reports"   # one <date>.md per run (<date>-dry-run.md for --dry-run)
+# staging = "~/exports/staging"   # filtered/converted copies; must be outside every source folder
+# state_dir = "~/.config/mempalace-sync"   # state.json + logs/ (default: next to this file)
+# wiki_sources = "~/path/to/wiki/wiki/sources"   # read-only, used to flag pages for curation
+
+# Chat exports (from the inbox). One transcript .md per conversation goes to
+# normalized_dir; only new/updated conversations are (re)written.
+[exports.claude_ai]
+wing = "claude_ai"
+normalized_dir = "~/exports/claude-ai/_normalized"
+
+[exports.chatgpt]
+wing = "chatgpt"
+normalized_dir = "~/exports/chatgpt/_normalized"
+
+# Sources. Missing folders are skipped silently, so you can list every agent.
+# mode = "convos" for agent session folders, "projects" for files.
+# include / exclude (globs on the file name, or on the relative path if they
+# contain "/") or convert (html, ipynb) make the source go through staging.
+# Always excluded: .git, .venv, node_modules, __pycache__ & co, binaries,
+# .env files, keys and credential-looking files.
+
+[[source]]
+name = "claude-code"
+path = "~/.claude/projects"
+mode = "convos"
+wing = "sessions"                 # same wing the MemPalace Claude Code hooks use
+
+[[source]]
+name = "codex"
+path = "~/.codex/sessions"
+mode = "convos"
+wing = "codex"
+
+[[source]]
+name = "pi"
+path = "~/.pi/agent/sessions"
+mode = "convos"
+wing = "pi"
+
+[[source]]
+name = "gemini-cli"
+path = "~/.gemini/tmp"
+mode = "convos"
+wing = "gemini"
+
+# OpenCode and Cursor keep sessions in SQLite/JSON layouts MemPalace 3.10 has
+# no parser for; add them here once it does.
+
+# A plain folder, mined in place:
+# [[source]]
+# name = "notes"
+# path = "~/Documents/notes"
+# mode = "projects"
+# wing = "notes"
+
+# A filtered folder, mined from staging with HTML/notebooks converted to markdown:
+# [[source]]
+# name = "course"
+# path = "~/Documents/course"
+# mode = "projects"
+# wing = "course"
+# include = ["*.md", "*.py", "*.sql", "*.html", "*.htm", "*.ipynb"]
+# exclude = ["*.csv", "*.json", "drafts/*"]
+# convert = ["html", "ipynb"]

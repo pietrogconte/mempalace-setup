@@ -4,10 +4,39 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![CI](https://github.com/pietrogconte/mempalace-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/pietrogconte/mempalace-setup/actions/workflows/ci.yml)
 
-Setup **global da máquina** do [MemPalace](https://github.com/MemPalace/mempalace) para o Claude Code: um script que configura os hooks que salvam automaticamente o histórico de conversas e uma nota mínima de recall no `~/.claude/CLAUDE.md` global. Roda uma vez por máquina — não pertence a nenhum projeto ou repositório específico. Funciona em Windows com Smart App Control ligado.
+Setup **global da máquina** do [MemPalace](https://github.com/MemPalace/mempalace) para o Claude Code, em duas peças independentes:
 
-## Setup
+1. **`setup_mempalace.py`** — roda uma vez: configura os hooks que salvam o histórico de conversas e uma nota mínima de recall no `~/.claude/CLAUDE.md` global.
+2. **`mempalace_sync.py`** — roda todo dia (tarefa agendada): rede de segurança para os hooks e captura do que eles não veem — outras ferramentas de agente, pastas de estudo/projeto e exports do claude.ai/ChatGPT — sempre de forma idempotente e com relatório.
+
+Não pertence a nenhum projeto específico. Funciona em Windows com Smart App Control ligado.
+
+## Quickstart
+
+1. **Setup único:** `python scripts/setup_mempalace.py --dry-run` para ver o diff, depois sem `--dry-run`. Reinicie o Claude Code.
+2. **Config do sync:** copie [`config.example.toml`](config.example.toml) para `~/.config/mempalace-sync/config.toml` e ajuste `mempalace.command`, os caminhos e as `[[source]]`.
+3. **Simule:** `<python> scripts/mempalace_sync.py --dry-run` e leia `~/exports/reports/<data>-dry-run.md`.
+4. **Rode de verdade:** `<python> scripts/mempalace_sync.py`.
+5. **Agende:** `<python> scripts/mempalace_sync.py task install --at 21:00`.
+
+`<python>` = o python do venv da ferramenta (veja [Windows](#windows-smart-app-control--application-control)), ex.: `C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/python.exe`.
+
+### Estrutura
+
+```
+.
+├── scripts/
+│   ├── setup_mempalace.py   # setup único (hooks + nota de recall)
+│   ├── mempalace_sync.py    # sync diário (entrada da CLI)
+│   └── mpsync/              # config, lock, staging, conversão, normalizador, relatório, tarefa
+├── config.example.toml      # modelo do ~/.config/mempalace-sync/config.toml
+├── tests/                   # unittest com dados fictícios e um MemPalace falso
+└── .github/workflows/ci.yml # testes em Python 3.9 e 3.12
+```
+
+## Setup único (`setup_mempalace.py`)
 
 ```
 python scripts/setup_mempalace.py --dry-run   # ver o que mudaria (mostra um diff, não grava nada)
@@ -23,13 +52,48 @@ O script:
 - Imprime onde fica o palace.
 - Sai com código 1 se alguma etapa falhar (ex.: `settings.json` com JSON inválido — ele não mexe no arquivo).
 
-O que ele **não** faz automaticamente (decisão sua, quando quiser):
+Ele não registra o bloco `mempalace rules` (protocolo completo de coordenação multi-agente, MCP com 45 ferramentas) — isso é escopo bem maior do que "memória entre sessões" (`mempalace rules --help`).
+
+## Sync diário (`mempalace_sync.py`)
+
 ```
-mempalace mine ~/.claude/projects/ --mode convos   # minerar conversas passadas
-mempalace mine <pasta-do-projeto>                    # minerar código/docs de um projeto
+<python> scripts/mempalace_sync.py --dry-run --verbose   # simula: nada vai para o palace
+<python> scripts/mempalace_sync.py                       # roda
+<python> scripts/mempalace_sync.py --only ia-notes       # só uma fonte ("inbox" = só o inbox)
+<python> scripts/mempalace_sync.py normalize export.zip saida/   # só o normalizador
 ```
 
-Também não registra o bloco `mempalace rules` (protocolo completo de coordenação multi-agente, MCP com 45 ferramentas) — isso é escopo bem maior do que "memória entre sessões". Se você quiser isso, é uma decisão separada (`mempalace rules --help`).
+Cada rodada, nesta ordem:
+
+1. **Fontes `[[source]]`** do config:
+   - `mode = "convos"` — pastas de sessão de agentes. O exemplo traz Claude Code (wing `sessions`, a mesma dos hooks, então nada duplica), Codex, pi e Gemini CLI; pastas que não existem são puladas. OpenCode e Cursor ficam de fora: o MemPalace 3.10 não tem parser para o armazenamento deles.
+   - `mode = "projects"` — pastas de arquivos. Sem filtros, minera no lugar. Com `include`/`exclude`/`convert`, minera de um **staging** fora da pasta original (`paths.staging`): HTML e notebooks viram markdown (sem markup, CSS, JS, outputs nem base64), texto UTF-16 é decodificado, e cada arquivo só é regravado se o conteúdo mudou — o MemPalace usa o mtime para saber o que já minerou.
+   - Sempre excluídos: `.git`, `.venv`, `node_modules`, `__pycache__` e afins, binários, `.env`, chaves e arquivos com cara de credencial. Uma pasta minerada no lugar que contenha arquivos assim é recusada (configure `include`/`exclude` para ela passar pelo staging).
+2. **Inbox de exports** (`paths.inbox`): cada `.zip` do claude.ai ou do ChatGPT é extraído numa pasta temporária, normalizado em um `.md` por conversa (só conversas novas ou com `updated_at` novo são gravadas), minerado, e movido para `paths.processed` — só se o mine deu certo. Transcrições já existentes na pasta de saída são adotadas sem reescrita.
+3. **Relatório** em `paths.reports/<data>.md` (rodadas extras no mesmo dia viram `<data>-2.md`, ...): status do palace antes/depois por wing, o que foi minerado, resumo do staging (10 maiores arquivos, duplicatas por conteúdo) e quais páginas de `paths.wiki_sources` podem precisar de curadoria (conversas novas/atualizadas que já têm página) ou ainda não têm página. **A wiki só é lida, nunca escrita.**
+
+**Um escritor por palace:** antes de cada mine o script testa o mesmo lock que o MemPalace usa (`~/.mempalace/locks/mine_palace_*.lock`). Com `lock_policy = "wait"` ele espera até `lock_wait_seconds` e depois pula; com `"skip"` pula na hora. Se outro escritor pegar o lock durante o mine, também conta como pulo. Pulos ficam no log e no relatório, e a próxima rodada recupera.
+
+Log diário em `~/.config/mempalace-sync/logs/`; estado (conversas já vistas) em `~/.config/mempalace-sync/state.json`.
+
+> **`--dry-run` no modo projects:** o `mine --dry-run` do MemPalace não verifica o que já foi minerado nesse modo, então os números são um teto; na rodada real, arquivos com mtime inalterado são pulados. No modo convos a verificação acontece normalmente.
+
+### Tarefa agendada (Windows)
+
+```
+<python> scripts/mempalace_sync.py task install --at 21:00   # registrar (ou atualizar)
+<python> scripts/mempalace_sync.py task show                 # ver detalhes / última execução
+<python> scripts/mempalace_sync.py task run                  # disparar agora
+<python> scripts/mempalace_sync.py task remove               # remover
+```
+
+A tarefa `mempalace-sync` roda diariamente, **só com o usuário logado** (sem senha armazenada), **executa assim que possível se o horário foi perdido** (PC desligado), nunca roda duas instâncias ao mesmo tempo e tem limite de 4 h. Ela chama o `pythonw.exe` ao lado do python que executou o `task install` (sem janela de console) diretamente com o caminho do script — sem `.bat`, `.ps1` ou `.vbs`. Antes de registrar, confira que esse `pythonw.exe` roda no seu PC:
+
+```
+C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/pythonw.exe -c "open('pyw-ok.txt','w').write('ok')"
+```
+
+Equivalente manual: `schtasks /Query /TN mempalace-sync /V /FO LIST` e `schtasks /Delete /TN mempalace-sync /F`.
 
 ## Onde fica o palace (e como conferir)
 
@@ -38,12 +102,9 @@ Também não registra o bloco `mempalace rules` (protocolo completo de coordena�
 
 O palace é **um só por máquina**, compartilhado por todos os seus projetos: uma busca feita a partir de um projeto pode trazer conversas de outro. Se precisar de isolamento real, aponte `palace_path` para caminhos diferentes ou use perfis/máquinas separados.
 
-Para conferir (use o python do venv da ferramenta — ver seção Windows abaixo):
 ```
 <python> -m mempalace status    # quantos drawers, por wing/room
-<python> -c "from mempalace.config import MempalaceConfig; print(MempalaceConfig().palace_path)"
 ```
-O `setup_mempalace.py` também imprime o caminho real no final.
 
 ## Windows: Smart App Control / Application Control
 
@@ -53,7 +114,15 @@ Os lançadores `.exe` que o `uv`/`pipx` criam (ex.: `~/.local/bin/mempalace.exe`
 C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/python.exe -m mempalace status
 ```
 
-O script já prefere essa forma e grava nos hooks com barras `/` (os hooks rodam no Git Bash). Use o mesmo prefixo no lugar de `mempalace` nos comandos deste README. Bloqueios aparecem no Visualizador de Eventos em *Microsoft-Windows-CodeIntegrity/Operational*.
+Os dois scripts seguem essa regra: os hooks e o `mempalace.command` do config usam essa forma, e a tarefa agendada chama o `pythonw.exe` do mesmo venv. Bloqueios aparecem no Visualizador de Eventos em *Microsoft-Windows-CodeIntegrity/Operational*.
+
+## Testes
+
+```
+python -m unittest discover -s tests -t . -v
+```
+
+O CI roda esses testes em Python 3.9 e 3.12 (Ubuntu) **sem o MemPalace instalado**: o sync é exercitado de ponta a ponta contra um CLI falso (`tests/fake_mempalace.py`), com exports, pastas e wiki fictícios. Cobrem: normalizador claude.ai/ChatGPT (incluindo adoção, renomeação e zip-slip), conversão HTML/notebook, staging (filtros, sensíveis, UTF-16, mtime preservado, remoção de obsoletos, duplicatas), config, lock entre processos, parsing da saída do MemPalace, dry-run, inbox e o XML da tarefa agendada. **Não** cobrem o `setup_mempalace.py`, o MemPalace real nem o registro da tarefa no Windows.
 
 ## Usando junto com uma LLM Wiki
 
@@ -66,12 +135,12 @@ Combina bem com o [llm-wiki-template](https://github.com/pietrogconte/llm-wiki-t
 | Você lê direto? | Sim — é markdown, abre no Obsidian, é o produto final | Não — é uma busca (`mempalace search`), não um lugar pra navegar |
 | Quando o agente usa | Sempre, pra responder sobre o que **já está** documentado na wiki (`wiki/index.md`) | Só quando falta contexto que não chegou a virar página ainda — ex.: "o que discutimos sobre X na semana passada?" |
 
-Na prática: a wiki é a "versão final" que você cultiva; o MemPalace é uma rede de segurança que evita perder o que ainda não foi promovido a página.
+Na prática: a wiki é a "versão final" que você cultiva; o MemPalace é uma rede de segurança que evita perder o que ainda não foi promovido a página. O relatório do sync faz a ponte: aponta quais páginas de `wiki/sources/` podem ter ficado desatualizadas — a curadoria continua sendo sua (ou do agente da wiki).
 
 ## Créditos
 
 - MemPalace: [MemPalace/mempalace](https://github.com/MemPalace/mempalace) (MIT).
-- Este script foi montado com [Claude Code](https://claude.com/claude-code).
+- Estes scripts foram montados com [Claude Code](https://claude.com/claude-code).
 
 ## Licença
 

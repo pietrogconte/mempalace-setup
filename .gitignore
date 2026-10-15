@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 Thumbs.db
 .DS_Store
+# personal config lives in ~/.config/mempalace-sync/, never here
+config.toml
