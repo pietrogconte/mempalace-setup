@@ -170,7 +170,7 @@ def run_search(snap, req):
 # ---------------------------------------------------------------- sidebar
 st.sidebar.title(T["title"])
 st.sidebar.caption(f"v{__version__} · {T['readonly']}")
-force = st.sidebar.button(T["refresh"], use_container_width=True)
+force = st.sidebar.button(T["refresh"], width="stretch")
 SNAP, warning = ensure_snapshot(force)
 if warning:
     st.sidebar.warning(warning)
@@ -227,7 +227,7 @@ with tab_search:
 with tab_browse:
     st.dataframe(
         [{T["wing"]: w, T["rooms"]: len(TREE.rooms(w)), T["drawers"]: TREE.wing_total(w)} for w in TREE.wings()],
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
     c1, c2 = st.columns(2)
     bw = c1.selectbox(T["wing"], TREE.wings(), key="bw",
@@ -242,7 +242,7 @@ with tab_browse:
                  T["last_filed"]: TREE.last_filed.get(src, "")[:16].replace("T", " "), "path": src}
                 for src, n in TREE.files(bw, br)
             ],
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
 # ---------------------------------------------------------------- audit
@@ -270,7 +270,7 @@ with tab_audit:
             event = st.dataframe(
                 [{"#": i + 1, T["kind"]: g.kind, T["masked"]: g.masked, T["confidence"]: T["conf_" + g.confidence],
                   T["count"]: g.count, T["wings"]: ", ".join(g.wings)} for i, g in enumerate(groups)],
-                hide_index=True, use_container_width=True,
+                hide_index=True, width="stretch",
                 on_select="rerun", selection_mode="single-row", key="audit_groups",
             )
             picked = event.selection.rows if event is not None else []
@@ -280,7 +280,7 @@ with tab_audit:
                 st.dataframe(
                     [{T["wing"]: f.wing, T["room"]: f.room, T["file"]: f.source_name,
                       T["snippet"]: f.snippet, T["drawer"]: f.drawer_id} for f in g.findings],
-                    hide_index=True, use_container_width=True,
+                    hide_index=True, width="stretch",
                 )
             rows = [
                 {"#": i + 1, T["kind"]: f.kind, T["confidence"]: f.confidence, T["wing"]: f.wing,
@@ -309,7 +309,7 @@ with tab_panel:
         frame.index.name = "date"
         # One day of history is a single point, invisible on a line chart.
         (st.line_chart if len(frame) > 1 else st.bar_chart)(frame)
-        st.dataframe(frame.T, use_container_width=True)
+        st.dataframe(frame.T, width="stretch")
     else:
         st.info(T["growth_none"])
     if not files:

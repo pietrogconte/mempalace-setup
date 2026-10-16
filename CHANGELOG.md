@@ -2,6 +2,11 @@
 
 All notable changes to this repo are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Viewer: `use_container_width=True` → `width="stretch"` on the sidebar button and every table. Streamlit 1.66 deprecates `use_container_width` (to be removed) and logged a warning on each render; no visual change.
+
 ## [1.1.0] - 2026-10-15
 
 A read-only viewer for the palace.
