@@ -24,6 +24,18 @@ exports = "~/exports"             # defaults below are relative to this
 # state_dir = "~/.config/mempalace-sync"   # state.json + logs/ (default: next to this file)
 # wiki_sources = "~/path/to/wiki/wiki/sources"   # read-only, used to flag pages for curation
 
+# Read-only viewer (viewer/run_viewer.py). It never opens the live palace: it
+# copies it to snapshot_dir while no writer holds the palace lock, and reads the copy.
+[viewer]
+# snapshot_dir = "%LOCALAPPDATA%/mempalace-viewer/snapshot"   # default; ~/.cache/... outside Windows
+port = 8501                       # always bound to 127.0.0.1
+# language = "en"                 # default: report_language
+# mempalace_python = "..."        # default: taken from mempalace.command = [python, -m, mempalace]
+# Extra audit patterns (Python regex), shown masked like the built-in ones:
+# audit_extra_patterns = [
+#   { name = "cpf", regex = '\d{3}\.\d{3}\.\d{3}-\d{2}' },
+# ]
+
 # Chat exports (from the inbox). One transcript .md per conversation goes to
 # normalized_dir; only new/updated conversations are (re)written.
 [exports.claude_ai]

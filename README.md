@@ -6,10 +6,11 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/pietrogconte/mempalace-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/pietrogconte/mempalace-setup/actions/workflows/ci.yml)
 
-Setup **global da máquina** do [MemPalace](https://github.com/MemPalace/mempalace) para o Claude Code, em duas peças independentes:
+Setup **global da máquina** do [MemPalace](https://github.com/MemPalace/mempalace) para o Claude Code, em três peças independentes:
 
 1. **`setup_mempalace.py`** — roda uma vez: configura os hooks que salvam o histórico de conversas e uma nota mínima de recall no `~/.claude/CLAUDE.md` global.
 2. **`mempalace_sync.py`** — roda todo dia (tarefa agendada): rede de segurança para os hooks e captura do que eles não veem — outras ferramentas de agente, pastas de estudo/projeto e exports do claude.ai/ChatGPT — sempre de forma idempotente e com relatório.
+3. **`viewer/`** — viewer mínimo e **só leitura** em Streamlit: busca, navegação, auditoria de dados sensíveis e os relatórios do sync. Trabalha sobre um snapshot e nunca abre o palace ao vivo.
 
 Não pertence a nenhum projeto específico. Funciona em Windows com Smart App Control ligado.
 
@@ -20,6 +21,7 @@ Não pertence a nenhum projeto específico. Funciona em Windows com Smart App Co
 3. **Simule:** `<python> scripts/mempalace_sync.py --dry-run` e leia `~/exports/reports/<data>-dry-run.md`.
 4. **Rode de verdade:** `<python> scripts/mempalace_sync.py`.
 5. **Agende:** `<python> scripts/mempalace_sync.py task install --at 21:00`.
+6. **Viewer (opcional):** `uv tool install streamlit` e abra pelo comando em [Viewer só leitura](#viewer-só-leitura-viewer).
 
 `<python>` = o python do venv da ferramenta (veja [Windows](#windows-smart-app-control--application-control)), ex.: `C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/python.exe`.
 
@@ -31,6 +33,12 @@ Não pertence a nenhum projeto específico. Funciona em Windows com Smart App Co
 │   ├── setup_mempalace.py   # setup único (hooks + nota de recall)
 │   ├── mempalace_sync.py    # sync diário (entrada da CLI)
 │   └── mpsync/              # config, lock, staging, conversão, normalizador, relatório, tarefa
+├── viewer/
+│   ├── run_viewer.py        # inicia o viewer em 127.0.0.1
+│   ├── app.py               # UI Streamlit (Busca, Navegação, Auditoria, Relatórios)
+│   ├── mpbridge.py          # busca, roda no venv do MemPalace, sobre o snapshot
+│   ├── mpview/              # snapshot, leitura, filtros, auditoria, relatórios (stdlib, sem UI)
+│   └── .streamlit/config.toml  # só 127.0.0.1, estatísticas de uso desligadas
 ├── config.example.toml      # modelo do ~/.config/mempalace-sync/config.toml
 ├── tests/                   # unittest com dados fictícios e um MemPalace falso
 └── .github/workflows/ci.yml # testes em Python 3.9 e 3.12
@@ -95,6 +103,59 @@ C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/pythonw.exe -c "open
 
 Equivalente manual: `schtasks /Query /TN mempalace-sync /V /FO LIST` e `schtasks /Delete /TN mempalace-sync /F`.
 
+## Viewer só leitura (`viewer/`)
+
+![Aba Auditoria do viewer, num palace fictício](docs/viewer-audit.jpg)
+
+*Aba Auditoria num palace fictício: uma linha por valor distinto, toda ocorrência mascarada.*
+
+**Por que um snapshot.** Com o backend Chroma do MemPalace, até uma busca grava no palace: abrir um `chromadb.PersistentClient` escreve no `chroma.sqlite3`, e as verificações antes de abrir podem renomear pastas de segmento HNSW. A opção `read_only=True` do MemPalace só é respeitada pelo backend `sqlite_exact`. Por isso o viewer nunca abre o palace ao vivo. Ele copia o palace para um cache local, e só enquanto nenhum escritor segura o lock do palace (o mesmo teste que o sync faz). Depois confere que o lock continua livre e que nenhum arquivo mudou durante a cópia; se mudou, descarta a cópia e tenta de novo. Se o palace continuar ocupado (o sync das 21h, um mine disparado por hook), o viewer segue mostrando o snapshot anterior, com um aviso. Busca, navegação e auditoria rodam todas sobre a cópia.
+
+- **Busca:** consulta semântica com filtros de wing, room e período (a data é o `filed_at` do drawer). Cada resultado mostra o trecho, a wing/room, o arquivo de origem e as datas. A busca roda no venv do próprio MemPalace (`viewer/mpbridge.py`, que precisa do embedder do MemPalace), sobre o snapshot; a ponte se recusa a rodar no palace ao vivo.
+- **Navegação:** wings → rooms → arquivos de origem, com contagem de drawers.
+- **Auditoria:** varre todos os drawers atrás de IPv4 (menos loopback, multicast, link-local e DNS públicos conhecidos), tokens `ghp_`/`github_pat_`, chaves `sk-`, chaves AWS `AKIA`/`ASIA`, chaves privadas, segredos de `.env` (placeholders ignorados) e posto + nome (postos do Exército, da Marinha e da FAB seguidos de nome com inicial maiúscula). Uma linha por valor distinto, com contagem e wings; selecione uma linha para ver as ocorrências. Posto + nome tem **confiança baixa** quando o posto é palavra comum (General, Major, Cabo, Soldado, TC); a tabela abre em **alta**. Ocorrências e trechos ficam mascarados na tela e no CSV, e os valores são agrupados por um hash com chave por processo, então nada na tela leva de volta ao valor original. Padrões extras: `[viewer] audit_extra_patterns`.
+- **Relatórios:** os relatórios do sync e da curadoria em `paths.reports`, renderizados, e os drawers por wing ao longo do tempo (coluna "Depois" do último relatório do sync de cada dia).
+
+### Instalar e rodar
+
+O Streamlit vai num **venv próprio**, não no do MemPalace (o Streamlit traz pandas, pyarrow e protobuf; o chromadb fixa as versões dele, e um `uv tool upgrade mempalace` desfaria a instalação de qualquer jeito):
+
+```
+uv tool install streamlit
+```
+
+Com o Smart App Control ligado, nunca use o `streamlit.exe`: sempre o `python.exe` desse venv. O próprio `run_viewer.py` chama `python -m streamlit`. Para abrir o viewer numa **janela nova do PowerShell** (Ctrl+C ou fechar a janela encerra):
+
+```powershell
+Start-Process powershell -WorkingDirectory "<repo>" -ArgumentList '-NoExit', '-Command', '& \"$env:APPDATA\uv\tools\streamlit\Scripts\python.exe\" viewer\run_viewer.py'
+```
+
+Ele abre `http://127.0.0.1:8501` no navegador (`--no-browser` para não abrir, `--config <caminho>` para outro config). O primeiro carregamento tira um snapshot; **Novo snapshot**, na barra lateral, atualiza.
+
+### Configuração e segurança
+
+Tabela `[viewer]` do `~/.config/mempalace-sync/config.toml` (veja [`config.example.toml`](config.example.toml)); o caminho do palace, a pasta de relatórios e o `mempalace.command` vêm do resto do arquivo.
+
+| Chave | Padrão |
+|---|---|
+| `snapshot_dir` | `%LOCALAPPDATA%\mempalace-viewer\snapshot` no Windows (cache local, nunca sincronizado), `~/.cache/mempalace-viewer/snapshot` fora dele. Precisa ficar fora do palace. Só o último snapshot é mantido. |
+| `port` | `8501` |
+| `language` | `report_language` (`en` ou `pt`) |
+| `mempalace_python` | tirado de `mempalace.command = [python, -m, mempalace]` |
+| `audit_extra_patterns` | nenhum |
+
+- **Só local:** o `viewer/.streamlit/config.toml` (versionado) e o `run_viewer.py` definem `server.address = 127.0.0.1` e `browser.gatherUsageStats = false`; o próprio app se recusa a rodar se algum dos dois for diferente. A telemetria do chromadb é desligada na ponte de busca.
+- **Nunca grava:** o palace ao vivo só é lido por cópia de arquivo; o snapshot é aberto com SQLite `mode=ro&immutable=1`; nada no viewer apaga ou edita drawers.
+
+### Removendo um drawer (pela CLI, se você decidir)
+
+O viewer só aponta. Para remover algo:
+
+1. Corrija a origem antes (apague o arquivo ou o segredo), senão o próximo sync minera de novo.
+2. Drawers cujo arquivo de origem foi apagado ou movido: `<python> -m mempalace sync --wing <wing> --dry-run`, depois `--apply`.
+3. Um drawer pelo id (coluna *Drawer* da auditoria): o MemPalace 3.10 não tem comando de CLI para isso; use a ferramenta MCP `mempalace_delete_drawer` (ex.: pelo Claude Code com o servidor MCP do MemPalace conectado).
+4. Tire um novo snapshot no viewer e rode a auditoria de novo.
+
 ## Onde fica o palace (e como conferir)
 
 - **Palace (os dados):** `~/.config/mempalace/palace` — no Windows, `%USERPROFILE%\.config\mempalace\palace`. O caminho vem de `palace_path` em `~/.config/mempalace/config.json`.
@@ -114,7 +175,7 @@ Os lançadores `.exe` que o `uv`/`pipx` criam (ex.: `~/.local/bin/mempalace.exe`
 C:/Users/<você>/AppData/Roaming/uv/tools/mempalace/Scripts/python.exe -m mempalace status
 ```
 
-Os dois scripts seguem essa regra: os hooks e o `mempalace.command` do config usam essa forma, e a tarefa agendada chama o `pythonw.exe` do mesmo venv. Bloqueios aparecem no Visualizador de Eventos em *Microsoft-Windows-CodeIntegrity/Operational*.
+Tudo aqui segue essa regra: os hooks e o `mempalace.command` do config usam essa forma, a tarefa agendada chama o `pythonw.exe` do mesmo venv, e o viewer roda com `python -m streamlit` a partir do venv próprio do Streamlit. Bloqueios aparecem no Visualizador de Eventos em *Microsoft-Windows-CodeIntegrity/Operational*.
 
 ## Testes
 
@@ -122,7 +183,7 @@ Os dois scripts seguem essa regra: os hooks e o `mempalace.command` do config us
 python -m unittest discover -s tests -t . -v
 ```
 
-O CI roda esses testes em Python 3.9 e 3.12 (Ubuntu) **sem o MemPalace instalado**: o sync é exercitado de ponta a ponta contra um CLI falso (`tests/fake_mempalace.py`), com exports, pastas e wiki fictícios. Cobrem: normalizador claude.ai/ChatGPT (incluindo adoção, renomeação e zip-slip), conversão HTML/notebook, staging (filtros, sensíveis, UTF-16, mtime preservado, remoção de obsoletos, duplicatas), config, lock entre processos, parsing da saída do MemPalace, dry-run, inbox e o XML da tarefa agendada. **Não** cobrem o `setup_mempalace.py`, o MemPalace real nem o registro da tarefa no Windows.
+O CI roda esses testes em Python 3.9 e 3.12 (Ubuntu) **sem o MemPalace instalado**: o sync é exercitado de ponta a ponta contra um CLI falso (`tests/fake_mempalace.py`), com exports, pastas e wiki fictícios. Cobrem: normalizador claude.ai/ChatGPT (incluindo adoção, renomeação e zip-slip), conversão HTML/notebook, staging (filtros, sensíveis, UTF-16, mtime preservado, remoção de obsoletos, duplicatas), config, lock entre processos, parsing da saída do MemPalace, dry-run, inbox e o XML da tarefa agendada. As partes sem interface do viewer são testadas do mesmo jeito, contra um `chroma.sqlite3` fictício: snapshot (lock ocupado, arquivos mudando durante a cópia, palace ao vivo intacto), leitura dos drawers, filtros e ponte da busca, auditoria (cada padrão, falsos positivos, mascaramento, agrupamento, confiança) e o parser dos relatórios; o CI também byte-compila o `viewer/`. **Não** cobrem o `setup_mempalace.py`, o MemPalace real, a UI do Streamlit nem o registro da tarefa no Windows.
 
 ## Usando junto com uma LLM Wiki
 

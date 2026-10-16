@@ -2,10 +2,24 @@
 
 All notable changes to this repo are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-15
+
+A read-only viewer for the palace.
+
+### Added
+- `viewer/`: a minimal Streamlit viewer that never writes to the palace.
+  - **Snapshot instead of the live palace.** With the Chroma backend, even a MemPalace search writes to `chroma.sqlite3` (and may rename HNSW folders); `read_only=True` is only honored by `sqlite_exact`. The viewer copies the palace to a local cache (`%LOCALAPPDATA%\mempalace-viewer\snapshot` by default, configurable) only while MemPalace's palace lock is free, re-checks the lock and every file's size/mtime after the copy, and retries or keeps the previous snapshot otherwise.
+  - **Search:** semantic query with wing, room and date-range filters, run by `viewer/mpbridge.py` inside MemPalace's own venv on the snapshot (it refuses the live palace). Results show excerpt, wing/room, source file and dates.
+  - **Browse:** wings → rooms → source files with drawer counts, read from the snapshot's SQLite (`mode=ro&immutable=1`, stdlib only).
+  - **Audit:** IPv4 (minus loopback, multicast, link-local and well-known public DNS), `ghp_`/`github_pat_`, `sk-`, AWS `AKIA`/`ASIA`, private keys, `.env` secrets (placeholders ignored, including Portuguese ones) and military rank + name (Army, Navy and Air Force ranks followed by a capitalized name). One row per distinct value (grouped by a per-process keyed hash) with count and wings, expandable to its occurrences; a confidence column (low when the rank is an everyday word: General, Major, Cabo, Soldado, TC), opening on high. Everything is masked on screen and in the CSV. Nothing is deleted; the README documents removal through the CLI/MCP.
+  - **Reports:** sync and curation reports rendered, and drawers per wing over time from the reports' status tables.
+  - Runs from Streamlit's own venv (`uv tool install streamlit`) with `python -m streamlit`, never `streamlit.exe` (Smart App Control). Listens on 127.0.0.1 only and with usage statistics off, set in the versioned `viewer/.streamlit/config.toml` and by `run_viewer.py`, and enforced by the app.
+- `[viewer]` table in the config (`snapshot_dir`, `port`, `language`, `mempalace_python`, `audit_extra_patterns`).
+- Viewer tests (fictitious `chroma.sqlite3`, no Streamlit or MemPalace needed): snapshot, store, filters, bridge refusal, audit, report parser, settings. CI byte-compiles `viewer/`.
 
 ### Changed
 - CI workflow: `actions/checkout` v4 → v7 and `actions/setup-python` v5 → v7 (`@v7`), both running on Node.js 24. GitHub has deprecated Node.js 20 on Actions runners and was forcing the old versions onto Node.js 24 with a warning. No change to what CI runs (tests on Python 3.9 and 3.12).
+- README (pt/en): viewer section with a screenshot of a fictitious palace.
 
 ## [1.0.0] - 2026-10-15
 

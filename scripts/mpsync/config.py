@@ -80,6 +80,7 @@ class Config:
     wiki_sources: str
     sources: List[Source]
     exports: Dict[str, ExportTarget]
+    viewer: dict = field(default_factory=dict)  # raw [viewer] table, parsed by viewer/mpview
 
     @property
     def state_file(self) -> str:
@@ -157,6 +158,7 @@ def parse_config(data: dict, path: str = "<memory>") -> Config:
         wiki_sources=expand(paths.get("wiki_sources", "")),
         sources=[],
         exports={},
+        viewer=dict(data.get("viewer", {})),
     )
 
     names = set()

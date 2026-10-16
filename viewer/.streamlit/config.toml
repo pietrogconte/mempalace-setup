@@ -1,0 +1,23 @@
+# Streamlit settings for the MemPalace viewer (read when Streamlit runs from viewer/,
+# which run_viewer.py does; it also passes the same values on the command line).
+# Local only: never listen on the network, never send usage statistics.
+
+[server]
+address = "127.0.0.1"
+port = 8501
+headless = true
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+serverAddress = "127.0.0.1"
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[runner]
+magicEnabled = false
+
+[theme]
+base = "light"
