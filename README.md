@@ -132,6 +132,19 @@ Start-Process powershell -WorkingDirectory "<repo>" -ArgumentList '-NoExit', '-C
 
 Ele abre `http://127.0.0.1:8501` no navegador (`--no-browser` para não abrir, `--config <caminho>` para outro config). O primeiro carregamento tira um snapshot; **Novo snapshot**, na barra lateral, atualiza.
 
+**Atalho na área de trabalho (opcional).** Um `.lnk` (sem `.bat`/`.ps1`) que abre o viewer numa janela nova do PowerShell, igual ao comando acima. Rode uma vez no PowerShell, trocando `<repo>`:
+
+```powershell
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Viewer do MemPalace.lnk'))
+$s.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$s.Arguments = '-NoExit -Command "& (Join-Path $env:APPDATA ''uv\tools\streamlit\Scripts\python.exe'') viewer\run_viewer.py"'
+$s.WorkingDirectory = '<repo>'
+$s.Save()
+```
+
+O `$env:APPDATA` fica literal no atalho e só é expandido quando ele abre. `GetFolderPath('Desktop')` acha a área de trabalho mesmo quando ela está no OneDrive. Para remover, basta apagar o atalho.
+
 ### Configuração e segurança
 
 Tabela `[viewer]` do `~/.config/mempalace-sync/config.toml` (veja [`config.example.toml`](config.example.toml)); o caminho do palace, a pasta de relatórios e o `mempalace.command` vêm do resto do arquivo.

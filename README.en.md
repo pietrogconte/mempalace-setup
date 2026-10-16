@@ -132,6 +132,19 @@ Start-Process powershell -WorkingDirectory "<repo>" -ArgumentList '-NoExit', '-C
 
 It opens `http://127.0.0.1:8501` in your browser (`--no-browser` to skip, `--config <path>` for another config). The first load takes a snapshot; **New snapshot** in the sidebar refreshes it.
 
+**Desktop shortcut (optional).** A `.lnk` (no `.bat`/`.ps1`) that opens the viewer in a new PowerShell window, like the command above. Run once in PowerShell, replacing `<repo>`:
+
+```powershell
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'MemPalace viewer.lnk'))
+$s.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$s.Arguments = '-NoExit -Command "& (Join-Path $env:APPDATA ''uv\tools\streamlit\Scripts\python.exe'') viewer\run_viewer.py"'
+$s.WorkingDirectory = '<repo>'
+$s.Save()
+```
+
+`$env:APPDATA` stays literal in the shortcut and is expanded when it opens. `GetFolderPath('Desktop')` finds the desktop even when OneDrive redirects it. To remove it, delete the shortcut.
+
 ### Configuration and security
 
 The `[viewer]` table of `~/.config/mempalace-sync/config.toml` (see [`config.example.toml`](config.example.toml)); the palace path, reports folder and `mempalace.command` come from the rest of that file.
